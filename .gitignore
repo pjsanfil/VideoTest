@@ -1,0 +1,7 @@
+VideoTest/nbproject/private
+VideoTestServer/nbproject/private
+VideoCommon/nbproject/private
+*.class
+dist
+build
+
