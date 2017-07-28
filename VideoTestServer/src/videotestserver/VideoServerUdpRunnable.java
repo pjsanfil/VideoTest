@@ -1,80 +1,78 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
+
 package videotestserver;
 
 import cameraops.ConfigCommand;
-import cameraops.CameraProducer;
+import cameraops.CameraProducerLocal;
+import java.io.IOException;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import javax.net.ssl.*;
-import java.io.IOException;
+import java.net.DatagramSocket;
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfByte;
+import org.opencv.imgcodecs.Imgcodecs;
 
 /**
  *
  * @author pjsanfil
  */
 public class VideoServerUdpRunnable implements Runnable {
-    private final int port;
-    public VideoServerUdpRunnable(int port) {
-        this.port = port;
+    private final int localPort;
+    private final int destPort;
+    
+    public VideoServerUdpRunnable(int localPort, int destPort) {
+        this.localPort = localPort;
+        this.destPort = destPort;
     }
     
     @Override
     public void run() {
         System.out.println("Running Server Thread: " + Thread.currentThread().getName());
+        try {
+            runAction();
+        } catch (IOException e) {
+            System.out.println("Quitting video server, error: " + e.getMessage());
+        }
+    }
+    
+    
+    private void runAction() throws UnknownHostException, SocketException, IOException {    
+        // TODO TEST ONLY, SEND THESE VIA CONSTRUCTOR
         BlockingQueue<Mat>frameQ = new ArrayBlockingQueue<>(5);
         BlockingQueue<ConfigCommand> producerCmdQ = new ArrayBlockingQueue<>(5);
-        CameraProducer producer = new CameraProducer(frameQ, producerCmdQ);
+        CameraProducerLocal producer = new CameraProducerLocal(frameQ, producerCmdQ);
         Thread producerThread = new Thread(producer);
         Mat frame;
-        boolean running = true;
-        
         producerThread.start();
+        // END TEST CODE
         
-        // TODO can I do this without the cast?
-        SSLServerSocketFactory sslfac = (SSLServerSocketFactory)SSLServerSocketFactory.getDefault();
-        SSLServerSocket serversock;
-        SSLSocket sock;
-        try {
-            serversock = (SSLServerSocket)sslfac.createServerSocket(port);
-            //sock = (SSLSocket)serversock.accept(); // BLOCKS
-        } catch (IOException e) {
-            System.out.println("SSL Server socket creation failed: " + e);
-            return;
-        }
-        
-        System.out.println("Server address: " + serversock.getInetAddress());
-        System.out.println("Port: " + serversock.getLocalPort());
-        String[] protocols = serversock.getEnabledProtocols();
-        System.out.println("SSL Enabled Protocols:");
-        for (String proto : protocols) {
-            System.out.println(proto);
-        }
-        String[] suites = serversock.getSupportedCipherSuites();
-        /*
-        System.out.println("Supported Cipher Suites:");
-        for (String suite : suites) {
-            System.out.println(suite);
-        }
-        */
-        
+        boolean running = true;
+        // TODO replace IP Address with whatever is correct way to get this
+        InetAddress destIPAddress = InetAddress.getByName("localhost");
+        DatagramSocket socket = new DatagramSocket(localPort);
+
         while(running) {
             try {
                 frame = frameQ.take();
                 // TODO pass out socket
-                
+                MatOfByte byteMat = new MatOfByte();
+                // converts MAT format frame to bmp format for conversion to Image for GUI
+                Imgcodecs.imencode(".bmp", frame, byteMat);
+                byte [] sendData = byteMat.toArray();
+                DatagramPacket packet = new DatagramPacket(sendData, sendData.length, destIPAddress, destPort);
+                System.out.println("sending packet of length " + sendData.length);
+                socket.send(packet);
             } catch (InterruptedException e) {
                 running = false;
                 System.out.println("Thread " + Thread.currentThread().getName() + " Quitting, interrupted from Queue take");
             }
         }
         // teardown
-        producerThread.interrupt();
+        producerThread.interrupt(); 
     }
 }
