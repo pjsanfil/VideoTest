@@ -1,10 +1,7 @@
 
 package videotest;
 
-import cameraops.ResolutionCommand;
-import cameraops.ConfigCommand;
-import cameraops.ColorCommand;
-import cameraops.CameraProducer;
+import cameraops.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -14,27 +11,36 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
-import javafx.geometry.Orientation;
-import javafx.geometry.Pos;
+import javafx.geometry.Insets;
 import javafx.scene.*;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Button;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
-import org.opencv.core.Core;
 import org.opencv.core.Mat;
 
 /**
  * Entry point for this JavaFx Application is here.
- * @author pjsanfil
  */
 public class VideoTest extends Application {
     static final String PROGRAM_TITLE = "Video Test Computer Program";
-    static final int START_HEIGHT = 600;
-    static final int START_WIDTH = 800;
+    static final int START_HEIGHT = 800;
+    static final int START_WIDTH = 1000;
+    
+    static final int EXTRA_HEIGHT = 200;
+    static final int EXTRA_WIDTH  = 80;
+    
     // GUI elements
+    Stage m_stage;
+    Button m_connectToButton;
     ComboBox<ColorCommand.ColorWord> m_selectColorOption;
     ComboBox<ResolutionCommand.Resolution> m_selectResolution;
+    
+    // GUI event handlers
+    private ConnectToEvent m_connectToEvent;
+    private OptionChangeEvent m_optionChangeEvent;
+    private ProducerOptionChangeEvent m_producerOptionChangeEvent;
     
     // timer for aquiring video stream
     private ScheduledExecutorService m_producerExec;
@@ -47,8 +53,7 @@ public class VideoTest extends Application {
     private CameraProducer m_producer;
     
     private int m_procCount = 0;
-    private OptionChangeEvent m_optionChange;
-    private ProducerOptionChangeEvent m_producerOptionChange;
+    
     
     /**
      * @param args the command line arguments
@@ -57,48 +62,29 @@ public class VideoTest extends Application {
         launch(args);
     }
 
-    // this runs before start but runs on the Launcher thread not the JavaFX
-    // Application Thread.
+    /**
+     * this runs before start but runs on the Launcher thread not the JavaFX
+     * Application Thread.
+     */ 
     @Override
     public void init() {
-        // without loading the actual OpenCV native library you get a wierd
-        // Exception at runtime when your first OpenCV call occurs, it is a
-        // java.lang.reflect.InvocationTargetException 
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+        OpenCvLibHandler.loadLib();
         m_procCount = Runtime.getRuntime().availableProcessors();
         System.out.println("Available processors: " + m_procCount);
     }
     
     @Override
     public void start(Stage stage) throws Exception {
+        m_stage = stage;
         stage.setTitle(PROGRAM_TITLE);
-        FlowPane rootNode = new FlowPane();
-        //GridPane grid = new GridPane();
-        //grid.setAlignment(Pos.CENTER);
-        rootNode.setAlignment(Pos.CENTER);
-        rootNode.setOrientation(Orientation.VERTICAL);
+        BorderPane rootNode = new BorderPane();
+        
         Scene scene = new Scene(rootNode, START_WIDTH, START_HEIGHT);
         stage.setScene(scene);
         ImageView videoWindow = new ImageView();
-        m_optionChange = new OptionChangeEvent();
         
-        ObservableList<ColorCommand.ColorWord> colorOptions = FXCollections.observableArrayList(
-                ColorCommand.ColorWord.COLOR, ColorCommand.ColorWord.GREYSCALE);
-        m_selectColorOption = new ComboBox<>(colorOptions);
-        m_selectColorOption.setValue(ColorCommand.ColorWord.COLOR);
-        m_selectColorOption.setOnAction(m_optionChange);
-        
-        ObservableList<ResolutionCommand.Resolution> resolutionOptions = FXCollections.observableArrayList();
-        for (ResolutionCommand.Resolution r : ResolutionCommand.Resolution.values()) {
-            resolutionOptions.add(r);
-        }
-        m_selectResolution = new ComboBox<>(resolutionOptions);
-        m_selectResolution.setValue(ResolutionCommand.Resolution.RES_800x600);
-        m_producerOptionChange = new ProducerOptionChangeEvent();
-        m_selectResolution.setOnAction(m_producerOptionChange);
-        
-        rootNode.getChildren().addAll(m_selectColorOption, m_selectResolution);
-        rootNode.getChildren().add(videoWindow);
+        rootNode.setCenter(videoWindow);
+        rootNode.setBottom(setupButtonBar());
         
         m_frameQ = new ArrayBlockingQueue<>(5);
         m_consumerCmdQ = new ArrayBlockingQueue<>(10);
@@ -107,12 +93,6 @@ public class VideoTest extends Application {
         m_vidUpdater = new VideoUpdater(videoWindow);
         m_consumerThread = new Thread(new CameraConsumer(m_frameQ, m_consumerCmdQ, m_vidUpdater), "Camera-Consumer-1");
         m_consumerThread.start();
-        
-        m_producer = new CameraProducer(m_frameQ, m_producerCmdQ);
-        
-        m_producerExec = Executors.newSingleThreadScheduledExecutor(m_producer);
-        m_producerExec.scheduleAtFixedRate(m_producer, 0, 33, TimeUnit.MILLISECONDS);
-        
         System.out.println("The JavaFX GUI runs on thread: " + Thread.currentThread().getName());
         stage.show();
     }
@@ -120,11 +100,77 @@ public class VideoTest extends Application {
     @Override
     public void stop() {
         System.out.println("Shutting down");
-        m_producerExec.shutdownNow(); // sends interrupt to thread
-        m_consumerThread.interrupt();
+        if (m_producerExec != null) {
+            m_producerExec.shutdownNow(); // sends interrupt to thread
+        }
+        if (m_consumerThread != null) {
+            m_consumerThread.interrupt();
+        }
+    }
+    
+    /**
+     * Creates an HBox full of controls for the program.
+     * @return The HBox containing the controls for the program.
+     */
+    private HBox setupButtonBar() {
+        HBox hbox = new HBox();
+        hbox.setPadding(new Insets(15, 12, 15, 12));
+        hbox.setSpacing(10);
+        hbox.setStyle("-fx-background-color: #336699;");
+        
+        m_connectToEvent = new ConnectToEvent();
+        m_connectToButton = new Button("Connect to...");
+        m_connectToButton.setOnAction(m_connectToEvent);
+        // added to scene below
+        
+        m_optionChangeEvent = new OptionChangeEvent();
+        ObservableList<ColorCommand.ColorWord> colorOptions = FXCollections.observableArrayList(
+                ColorCommand.ColorWord.COLOR, ColorCommand.ColorWord.GREYSCALE);
+        m_selectColorOption = new ComboBox<>(colorOptions);
+        m_selectColorOption.setValue(ColorCommand.ColorWord.COLOR);
+        m_selectColorOption.setOnAction(m_optionChangeEvent);
+        // added to scene below
+        
+        ObservableList<ResolutionCommand.Resolution> resolutionOptions = FXCollections.observableArrayList();
+        for (ResolutionCommand.Resolution r : ResolutionCommand.Resolution.values()) {
+            resolutionOptions.add(r);
+        }
+        m_selectResolution = new ComboBox<>(resolutionOptions);
+        m_selectResolution.setValue(ResolutionCommand.Resolution.RES_800x600);
+        m_producerOptionChangeEvent = new ProducerOptionChangeEvent();
+        m_selectResolution.setOnAction(m_producerOptionChangeEvent);
+        
+        hbox.getChildren().addAll(m_connectToButton, m_selectColorOption, m_selectResolution);
+        return hbox;
     }
     
     
+    
+    
+    private class ConnectToEvent implements EventHandler<ActionEvent> {
+        @Override
+        public void handle(ActionEvent evt) {
+            startLocalProducer();
+            // TODO will add a dialog box to allow configuring a remote connection
+        }
+        
+        private void startLocalProducer() {
+            if (m_producer != null) {
+                m_producer.stopCapture();
+                m_producerExec.shutdownNow();
+            }
+            m_producer = new CameraProducerLocal(m_frameQ, m_producerCmdQ);
+            m_producerExec = Executors.newSingleThreadScheduledExecutor(m_producer);
+            m_producerExec.scheduleAtFixedRate(m_producer, 0, 33, TimeUnit.MILLISECONDS);
+        }
+
+        private void startRemoteProducer() {
+            if (m_producer != null) {
+                m_producer.stopCapture();
+                m_producerExec.shutdownNow();
+            }
+        }
+    }
     
     private class OptionChangeEvent implements EventHandler<ActionEvent> {
 
@@ -154,6 +200,13 @@ public class VideoTest extends Application {
                 System.out.println("Changing resolution to: " + m_selectResolution.getValue());
                 cmd = new ResolutionCommand();
                 cmd.set(m_selectResolution.getValue());
+                // resize window if it's too small
+                if (m_stage.getWidth() < cmd.getWidth() + EXTRA_WIDTH) {
+                    m_stage.setWidth(cmd.getWidth() + EXTRA_WIDTH);
+                }
+                if (m_stage.getHeight() < cmd.getHeight() + EXTRA_HEIGHT) {
+                    m_stage.setHeight(cmd.getHeight() + EXTRA_HEIGHT);
+                }
             }
             if (cmd != null) {
                 try {

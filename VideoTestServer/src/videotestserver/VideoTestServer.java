@@ -17,13 +17,16 @@ public class VideoTestServer {
      * @param args the command line arguments
      */
     public static void main(String[] args) {
-        if (args.length < 1) {
-            System.out.println("usage: VideoServer <port>");
+        if (args.length < 2) {
+            System.out.println("usage: VideoTestServer <local port> <dest port>");
             return;
         }
-        int port = Integer.parseInt(args[0]);
+        int localPort = Integer.parseInt(args[0]);
+        int destPort = Integer.parseInt(args[1]);
+        System.out.println("local port: " + localPort +" dest port: " + destPort);
         System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-        VideoServerUdpRunnable server = new VideoServerUdpRunnable(port);
+        //VideoServerUdpRunnable server = new VideoServerUdpRunnable(localPort, destPort);
+        VideoServerSSLRunnable server = new VideoServerSSLRunnable(localPort, destPort);
         Thread serverThread = new Thread(server);
         serverThread.start();
         try {
