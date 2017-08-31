@@ -36,6 +36,7 @@ public class VideoTest extends Application {
     Button m_connectToButton;
     ComboBox<ColorCommand.ColorWord> m_selectColorOption;
     ComboBox<ResolutionCommand.Resolution> m_selectResolution;
+    ComboBox<ImageRecCommand.ImageRecWord> m_selectImageRec;
     
     // GUI event handlers
     private ConnectToEvent m_connectToEvent;
@@ -140,7 +141,15 @@ public class VideoTest extends Application {
         m_producerOptionChangeEvent = new ProducerOptionChangeEvent();
         m_selectResolution.setOnAction(m_producerOptionChangeEvent);
         
-        hbox.getChildren().addAll(m_connectToButton, m_selectColorOption, m_selectResolution);
+        ObservableList<ImageRecCommand.ImageRecWord> imageRecOptions = FXCollections.observableArrayList();
+        for (ImageRecCommand.ImageRecWord w : ImageRecCommand.ImageRecWord.values()) {
+            imageRecOptions.add(w);
+        }
+        m_selectImageRec = new ComboBox<>(imageRecOptions);
+        m_selectImageRec.setValue(ImageRecCommand.ImageRecWord.NONE);
+        m_selectImageRec.setOnAction(m_optionChangeEvent);
+        
+        hbox.getChildren().addAll(m_connectToButton, m_selectColorOption, m_selectResolution, m_selectImageRec);
         return hbox;
     }
     
@@ -176,11 +185,14 @@ public class VideoTest extends Application {
 
         @Override
         public void handle(ActionEvent evt) {
-            ColorCommand cmd = null;
+            ConfigCommand cmd = null;
             if (m_selectColorOption == evt.getSource()) {
                 System.out.println("Changing color setting to: " + m_selectColorOption.getValue());
                 cmd = new ColorCommand();
-                cmd.set(m_selectColorOption.getValue());
+                ((ColorCommand)cmd).set(m_selectColorOption.getValue());
+            } else if (m_selectImageRec == evt.getSource()) {
+                cmd = new ImageRecCommand();
+                ((ImageRecCommand)cmd).set(m_selectImageRec.getValue());
             }
             if (cmd != null) {
                 try {

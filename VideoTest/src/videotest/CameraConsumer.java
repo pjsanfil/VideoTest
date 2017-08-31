@@ -7,9 +7,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.util.concurrent.BlockingQueue;
 import javafx.scene.image.Image;
-import org.opencv.core.Core;
 import org.opencv.imgcodecs.Imgcodecs;
-//import org.opencv.contrib.FaceRecognizer;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.core.MatOfRect;
@@ -17,23 +15,23 @@ import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
-import static org.opencv.imgproc.Imgproc.cvtColor;
 import org.opencv.objdetect.CascadeClassifier;
+import static org.opencv.imgproc.Imgproc.cvtColor;
 
 /**
  * Consumer of Video Frames, performs any processing operations on them,
  * then sends them to the destination.
  */
-public class CameraConsumer implements Runnable {
-    //private static final String HC_FRONTAL = "/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml";
-    private static final File HC_FRONTAL = new File("/usr/local/share/OpenCV/lbpcascades/lbpcascade_frontalface.xml");
+public final class CameraConsumer implements Runnable {
+    private static final File HC_FRONTAL = new File("/usr/local/share/OpenCV/haarcascades/haarcascade_frontalface_default.xml");
+    private static final File LBP_FRONTAL = new File("/usr/local/share/OpenCV/lbpcascades/lbpcascade_frontalface.xml");
     
     private BlockingQueue<Mat> m_frameQ;
     private BlockingQueue<ConfigCommand> m_cmdQ;
     private VideoUpdater m_vidUpdate;
     private ColorCommand.ColorWord m_colorSetting;
     
-    private CascadeClassifier m_faceRec;
+    private CascadeClassifier m_cascade;
     
     public CameraConsumer(BlockingQueue<Mat> frameQueue, BlockingQueue<ConfigCommand> cmdQueue, VideoUpdater toUpdate) {
         if (frameQueue == null || cmdQueue == null || toUpdate == null) {
@@ -44,14 +42,14 @@ public class CameraConsumer implements Runnable {
         m_vidUpdate = toUpdate;
         m_colorSetting = ColorCommand.ColorWord.COLOR;
         if (!HC_FRONTAL.exists()) {
-            System.out.println("Error: CascadeClassifier file " + HC_FRONTAL.getAbsolutePath() + " does not exist, exiting");
+            System.out.println("Error: HAAR CascadeClassifier file " + HC_FRONTAL.getAbsolutePath() + " does not exist, exiting");
             System.exit(0);
         }
-        m_faceRec = new CascadeClassifier(HC_FRONTAL.getAbsolutePath());
-        if (m_faceRec.empty()) {
-            System.out.println("Error: CascadeClassifier file " + HC_FRONTAL.getAbsolutePath() + " not loaded, exiting");
+        if (!LBP_FRONTAL.exists()) {
+            System.out.println("Error: LBP CascadeClassifier file " + LBP_FRONTAL.getAbsolutePath() + " does not exist, exiting");
             System.exit(0);
         }
+        m_cascade = null; // = new CascadeClassifier(HC_FRONTAL.getAbsolutePath());
     }
     /**
      * OpenCV Packages.
@@ -100,7 +98,7 @@ public class CameraConsumer implements Runnable {
                     showFrame = origFrame;
                 }
                 
-                if (!origFrame.empty()) {
+                if (m_cascade != null) {
                     FaceRecognize(grayFrame, showFrame);
                 }
                 // TODO: state machine to detect movement and OCR text in the image
@@ -121,9 +119,15 @@ public class CameraConsumer implements Runnable {
         }
     }
     
+    /**
+     * Uses whatever the active CascadeClassifier is to detect something in the
+     * image.
+     * @param grayFrame Input image to detect something in.
+     * @param outp Image with a box drawn around the object to detect, if found.
+     */
     private void FaceRecognize(Mat grayFrame, Mat outp) {
         MatOfRect faceDetections = new MatOfRect();
-        m_faceRec.detectMultiScale(grayFrame, faceDetections);
+        m_cascade.detectMultiScale(grayFrame, faceDetections);
 
         // Draw a bounding box around each face.
         for (Rect rect : faceDetections.toArray()) {
@@ -136,6 +140,24 @@ public class CameraConsumer implements Runnable {
         if (cmd.getClass() == ColorCommand.class) {
             m_colorSetting = (ColorCommand.ColorWord)cmd.get();
             System.out.println("Consumer Setting color to " + m_colorSetting);
+        } else if (cmd.getClass() == ImageRecCommand.class) {
+            changeImageRec((ImageRecCommand)cmd);
+        }
+    }
+    
+    private void changeImageRec(ImageRecCommand cmd) {
+        if (null != cmd.get()) switch (cmd.get()) {
+            case NONE:
+                m_cascade = null;
+                break;
+            case HAAR_CASCADE:
+                m_cascade = new CascadeClassifier(HC_FRONTAL.getAbsolutePath());
+                break;
+            case LBP_CASCADE:
+                m_cascade = new CascadeClassifier(LBP_FRONTAL.getAbsolutePath());
+                break;
+            default:
+                break;
         }
     }
 }

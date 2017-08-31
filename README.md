@@ -5,7 +5,7 @@ the OpenCV library to get webcam images and do image processing on them.
 # Dependancies
 1. JRE 1.8 (Java SE 8 or higher)
 2. OpenCV Java Library 3.3 (3.0 or higher)
-   See [OpenCV 3.3](opencv-3.3) for instructions.
+   See [OpenCV 3.3](#opencv-3.3) for instructions.
 
 # Building and Running
 1. Download the source code.
