@@ -11,10 +11,6 @@ import javax.net.ssl.SSLServerSocketFactory;
 import javax.net.ssl.SSLSocket;
 import org.opencv.core.Mat;
 
-/**
- *
- * @author pjsanfil
- */
 public class VideoServerSSLRunnable implements Runnable {
     private final int localPort, destPort;
     

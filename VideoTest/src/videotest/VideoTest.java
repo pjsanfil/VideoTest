@@ -1,6 +1,7 @@
 
 package videotest;
 
+import cameraops.CodecCommand;
 import cameraops.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
@@ -36,6 +37,8 @@ public class VideoTest extends Application {
     Button m_connectToButton;
     ComboBox<ColorCommand.ColorWord> m_selectColorOption;
     ComboBox<ResolutionCommand.Resolution> m_selectResolution;
+    ComboBox<CodecCommand.CodecWord> m_selectCodec;
+    ComboBox<ImageRecCommand.ImageRecWord> m_selectImageRec;
     
     // GUI event handlers
     private ConnectToEvent m_connectToEvent;
@@ -68,7 +71,13 @@ public class VideoTest extends Application {
      */ 
     @Override
     public void init() {
-        OpenCvLibHandler.loadLib();
+        try {
+            OpenCvLibHandler.loadLib();
+        } catch (UnsatisfiedLinkError e) {
+            System.out.println("ERROR Loading OpenCV: " + e.getMessage());
+            System.out.println("Try recompiling or reinstalling OpenCV");
+            System.exit(1);
+        }
         m_procCount = Runtime.getRuntime().availableProcessors();
         System.out.println("Available processors: " + m_procCount);
     }
@@ -140,7 +149,23 @@ public class VideoTest extends Application {
         m_producerOptionChangeEvent = new ProducerOptionChangeEvent();
         m_selectResolution.setOnAction(m_producerOptionChangeEvent);
         
-        hbox.getChildren().addAll(m_connectToButton, m_selectColorOption, m_selectResolution);
+        ObservableList<CodecCommand.CodecWord> codecOptions = FXCollections.observableArrayList();
+        for (CodecCommand.CodecWord c : CodecCommand.CodecWord.values()) {
+            codecOptions.add(c);
+        }
+        m_selectCodec = new ComboBox<>(codecOptions);
+        m_selectCodec.setValue(CodecCommand.CodecWord.YUYV);
+        m_selectCodec.setOnAction(m_producerOptionChangeEvent);
+        
+        ObservableList<ImageRecCommand.ImageRecWord> imageRecOptions = FXCollections.observableArrayList();
+        for (ImageRecCommand.ImageRecWord w : ImageRecCommand.ImageRecWord.values()) {
+            imageRecOptions.add(w);
+        }
+        m_selectImageRec = new ComboBox<>(imageRecOptions);
+        m_selectImageRec.setValue(ImageRecCommand.ImageRecWord.NONE);
+        m_selectImageRec.setOnAction(m_optionChangeEvent);
+        
+        hbox.getChildren().addAll(m_connectToButton, m_selectColorOption, m_selectResolution, m_selectCodec, m_selectImageRec);
         return hbox;
     }
     
@@ -176,11 +201,14 @@ public class VideoTest extends Application {
 
         @Override
         public void handle(ActionEvent evt) {
-            ColorCommand cmd = null;
+            ConfigCommand cmd = null;
             if (m_selectColorOption == evt.getSource()) {
                 System.out.println("Changing color setting to: " + m_selectColorOption.getValue());
                 cmd = new ColorCommand();
-                cmd.set(m_selectColorOption.getValue());
+                ((ColorCommand)cmd).set(m_selectColorOption.getValue());
+            } else if (m_selectImageRec == evt.getSource()) {
+                cmd = new ImageRecCommand();
+                ((ImageRecCommand)cmd).set(m_selectImageRec.getValue());
             }
             if (cmd != null) {
                 try {
@@ -195,18 +223,21 @@ public class VideoTest extends Application {
     private class ProducerOptionChangeEvent implements EventHandler<ActionEvent> {
         @Override
         public void handle(ActionEvent evt) {
-            ResolutionCommand cmd = null;
+            ConfigCommand cmd = null;
             if (m_selectResolution == evt.getSource()) {
                 System.out.println("Changing resolution to: " + m_selectResolution.getValue());
                 cmd = new ResolutionCommand();
-                cmd.set(m_selectResolution.getValue());
+                ((ResolutionCommand)cmd).set(m_selectResolution.getValue());
                 // resize window if it's too small
-                if (m_stage.getWidth() < cmd.getWidth() + EXTRA_WIDTH) {
-                    m_stage.setWidth(cmd.getWidth() + EXTRA_WIDTH);
+                if (m_stage.getWidth() < ((ResolutionCommand)cmd).getWidth() + EXTRA_WIDTH) {
+                    m_stage.setWidth(((ResolutionCommand)cmd).getWidth() + EXTRA_WIDTH);
                 }
-                if (m_stage.getHeight() < cmd.getHeight() + EXTRA_HEIGHT) {
-                    m_stage.setHeight(cmd.getHeight() + EXTRA_HEIGHT);
+                if (m_stage.getHeight() < ((ResolutionCommand)cmd).getHeight() + EXTRA_HEIGHT) {
+                    m_stage.setHeight(((ResolutionCommand)cmd).getHeight() + EXTRA_HEIGHT);
                 }
+            } else if (m_selectCodec == evt.getSource()) {
+                cmd = new CodecCommand();
+                ((CodecCommand)cmd).set(m_selectCodec.getValue());
             }
             if (cmd != null) {
                 try {
