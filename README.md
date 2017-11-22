@@ -45,9 +45,9 @@ Configure the settings shown in the [next section](#cmake-config-for-opencv-3.3)
 
 ```bash
 make -j8
-execstack -c lib/libopencv_java330.so
-cp lib/libopencv_java330.so <VideoTest dir>/libs/
-cd bin/opencv-330.jar <VideoTest dir>/libs/
+sudo make install
+cd /usr/local/share/OpenCV/java
+sudo execstack -c libopencv_java330.so
 ```
 
 ## CMAKE Config for OpenCV 3.3

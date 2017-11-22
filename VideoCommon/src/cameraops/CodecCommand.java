@@ -14,13 +14,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package videotest;
+package cameraops;
 
 import cameraops.ConfigCommand;
-
 /**
- *
+ * Set a video codec option.
  */
-public class ImageRecCommand extends ConfigCommand<ImageRecCommand.ImageRecWord> {
-    public enum ImageRecWord {NONE, HAAR_CASCADE, LBP_CASCADE};
+public class CodecCommand extends ConfigCommand<CodecCommand.CodecWord> {
+    public enum CodecWord {YUYV, MJPG};
 }
